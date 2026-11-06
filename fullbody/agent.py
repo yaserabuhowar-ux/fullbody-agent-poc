@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
+from . import pk
 from rdkit import Chem
 from rdkit.Chem import Crippen, Descriptors, Lipinski, rdMolDescriptors
 from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
@@ -31,11 +32,15 @@ DEFAULT_THRESHOLDS = {"occ_efficacy_min": 0.5, "occ_liability_max": 0.2, "ro5_ma
 class State(TypedDict, total=False):
     molecule_id: str
     free_conc_nM: float | None
+    use_pk: bool
+    pk_path: str
+    pk: dict
     thresholds: dict
     snapshot: dict
     mol: dict
     target: dict
     cell: dict
+    cell_sensitivity: dict
     organ: dict
     body: dict
     verdict: dict
@@ -113,6 +118,36 @@ def target_agent(state: State) -> State:
     return state
 
 
+def pk_agent(state: State) -> State:
+    """Level 'whole-body PK': dose -> steady-state free concentration profile (one-compartment)."""
+    if not state.get("use_pk"):
+        return state
+    params = json.loads(Path(state["pk_path"]).read_text(encoding="utf-8")).get(state["molecule_id"])
+    if params is None:
+        state["halt"] = True
+        _t(state, "7_body", "pk_agent", "no sourced PK parameters for this molecule", False)
+        return state
+    m = pk.model_from_params(params)
+    d = params["regimen"]
+    ts, prof = pk.steady_state_profile(d["dose_mg"], d["interval_h"], m)
+    summ = pk.summarize(ts, prof)
+    fu, mw = params["fu"]["value"], params["mw"]
+    free = [pk.ng_ml_to_free_nM(c, mw, fu) for c in prof]
+    state["pk"] = {"regimen": d, "model": {k: (round(v, 3) if isinstance(v, float) else v) for k, v in m.items()},
+                   "summary": {k: round(v, 2) for k, v in summ.items()}, "free_nM": free, "t_h": ts,
+                   "free_cmax_nM": round(max(free), 1), "free_cmin_nM": round(min(free), 1),
+                   "free_mean_nM": round(sum(free) / len(free), 1), "params": params}
+    _t(state, "7_body", "pk_agent",
+       f"{d['dose_mg']} mg q{d['interval_h']}h: total Cmax {summ['cmax_ng_ml']:.1f} ng/mL, "
+       f"free Cmax {max(free):.1f} nM / mean {sum(free)/len(free):.1f} nM / trough {min(free):.1f} nM "
+       f"(t1/2 used {m['t_half_used_h']:.2f} h{', fitted to label Cmax' if m['fitted_to_label_cmax'] else ''})", True)
+    return state
+
+
+def _mean_occ(free, ic50):
+    return sum(c / (c + ic50) for c in free) / len(free)
+
+
 def cell_agent(state: State) -> State:
     """Occupancy at the requested free concentration + the concentration for 50% occupancy."""
     t = state["target"]
@@ -122,10 +157,35 @@ def cell_agent(state: State) -> State:
         ic50 = t[g]["ic50_nM"]
         cell[pw] = {"target": g, "role": role, "ic50_nM": ic50,
                     "occupancy_at_conc": None if conc is None else round(conc / (conc + ic50), 3)}
+    if state.get("pk"):
+        free = state["pk"]["free_nM"]
+        for pw, v in cell.items():
+            ic = v["ic50_nM"]
+            v["occupancy_mean"] = round(_mean_occ(free, ic), 3)
+            v["occupancy_peak"] = round(max(free) / (max(free) + ic), 3)
+            v["occupancy_trough"] = round(min(free) / (min(free) + ic), 3)
+        # sensitivity over the IC50 spread of the ChEMBL records (best/worst case)
+        sens = {}
+        for g in TARGETS:
+            lo_p, hi_p = t[g]["spread_pchembl"]
+            sens[g] = {"ic50_range_nM": [round(10 ** (9 - hi_p), 1), round(10 ** (9 - lo_p), 1)]}
+        th = state["thresholds"]
+        cases = {}
+        for label, j1, j2 in [("favourable", sens["JAK1"]["ic50_range_nM"][0], sens["JAK2"]["ic50_range_nM"][1]),
+                              ("unfavourable", sens["JAK1"]["ic50_range_nM"][1], sens["JAK2"]["ic50_range_nM"][0])]:
+            cases[label] = {"jak1_mean_occ": round(_mean_occ(free, j1), 3), "jak2_mean_occ": round(_mean_occ(free, j2), 3)}
+            cases[label]["passes"] = (cases[label]["jak1_mean_occ"] >= th["occ_efficacy_min"]
+                                      and cases[label]["jak2_mean_occ"] <= th["occ_liability_max"])
+        state["cell_sensitivity"] = cases
     state["cell"] = cell
-    _t(state, "3_cell", "cell_agent",
-       "; ".join(f"{pw}: occ={v['occupancy_at_conc']}" for pw, v in cell.items()) if conc is not None
-       else "no concentration given; window analysis only", True)
+    if state.get("pk"):
+        msg = "; ".join(f"{pw}: mean occ={v['occupancy_mean']} (peak {v['occupancy_peak']}, trough {v['occupancy_trough']})"
+                        for pw, v in cell.items())
+    elif conc is not None:
+        msg = "; ".join(f"{pw}: occ={v['occupancy_at_conc']}" for pw, v in cell.items())
+    else:
+        msg = "no concentration given; window analysis only"
+    _t(state, "3_cell", "cell_agent", msg, True)
     return state
 
 
@@ -154,9 +214,21 @@ def body_agent(state: State) -> State:
         liab = cell["EPO/STAT5 (erythropoiesis)"]["occupancy_at_conc"]
         body["at_conc"] = {"conc_nM": conc, "efficacy_ok": eff >= th["occ_efficacy_min"],
                            "liability_ok": liab <= th["occ_liability_max"]}
+    ok = o["window_exists"]
+    extra = ""
+    if state.get("pk"):
+        cell = state["cell"]
+        eff = cell["IL-6/STAT3 (inflammation)"]["occupancy_mean"]
+        liab = cell["EPO/STAT5 (erythropoiesis)"]["occupancy_mean"]
+        sens = state["cell_sensitivity"]
+        body["at_regimen"] = {"efficacy_mean_occ": eff, "liability_mean_occ": liab,
+                              "efficacy_ok": eff >= th["occ_efficacy_min"], "liability_ok": liab <= th["occ_liability_max"],
+                              "robust_across_ic50_spread": {k: v["passes"] for k, v in sens.items()}}
+        ok = ok and body["at_regimen"]["efficacy_ok"] and body["at_regimen"]["liability_ok"]
+        extra = f"; regimen: JAK1 mean occ {eff}, JAK2 mean occ {liab}; sensitivity {body['at_regimen']['robust_across_ic50_spread']}"
     state["body"] = body
     _t(state, "7_body", "body_agent", f"therapeutic window (free nM): {body['window_nM']}"
-       + (f"; at {conc} nM -> {body['at_conc']}" if conc is not None else ""), o["window_exists"])
+       + (f"; at {conc} nM -> {body['at_conc']}" if conc is not None else "") + extra, ok)
     return state
 
 
@@ -184,13 +256,14 @@ def route(state: State) -> str:
 
 def build_graph():
     g = StateGraph(State)
-    for name, fn in [("decompose", decompose), ("molecule", molecule_agent), ("target", target_agent),
+    for name, fn in [("decompose", decompose), ("molecule", molecule_agent), ("target", target_agent), ("pk", pk_agent),
                      ("cell", cell_agent), ("organ", organ_agent), ("body", body_agent), ("arbiter", arbiter)]:
         g.add_node(name, fn)
     g.add_edge(START, "decompose")
     g.add_conditional_edges("decompose", route, {"continue": "molecule", "arbiter": "arbiter"})
     g.add_conditional_edges("molecule", route, {"continue": "target", "arbiter": "arbiter"})
-    g.add_conditional_edges("target", route, {"continue": "cell", "arbiter": "arbiter"})
+    g.add_conditional_edges("target", route, {"continue": "pk", "arbiter": "arbiter"})
+    g.add_conditional_edges("pk", route, {"continue": "cell", "arbiter": "arbiter"})
     g.add_edge("cell", "organ")
     g.add_edge("organ", "body")
     g.add_edge("body", "arbiter")
@@ -199,8 +272,9 @@ def build_graph():
 
 
 def simulate(molecule_id: str, snapshot_path: str | Path, free_conc_nM: float | None = None,
-             thresholds: dict | None = None) -> State:
+             thresholds: dict | None = None, use_pk: bool = False, pk_path: str | Path | None = None) -> State:
     snap = json.loads(Path(snapshot_path).read_text(encoding="utf-8"))
     st: State = {"molecule_id": molecule_id, "free_conc_nM": free_conc_nM, "snapshot": snap,
+                 "use_pk": use_pk, "pk_path": str(pk_path or Path(snapshot_path).with_name("pk_params.json")),
                  "thresholds": {**DEFAULT_THRESHOLDS, **(thresholds or {})}, "trace": []}
     return build_graph().invoke(st)

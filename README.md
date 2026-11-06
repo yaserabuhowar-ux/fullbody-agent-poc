@@ -6,6 +6,8 @@ Supervisor agent + level agents (LangGraph) that run a molecule through molecule
 pip install rdkit langgraph pytest
 python -m fullbody.cli simulate CHEMBL3622821 --conc 100   # upadacitinib -> SUPPORTED (window 42.7-150.7 nM free)
 python -m fullbody.cli simulate CHEMBL221959 --conc 100    # tofacitinib  -> NOT SUPPORTED (no JAK1-over-JAK2 window)
+python -m fullbody.cli simulate CHEMBL3622821 --pk          # dose -> free-concentration profile -> occupancy
+python -m fullbody.cli validate                             # positive-control check (see below)
 python -m fullbody.cli reverse --profile profiles/ra_jak1.json
 pytest -q
 ```
@@ -13,6 +15,17 @@ pytest -q
 ## Architecture
 `decompose -> molecule (RDKit) -> target (ChEMBL IC50) -> cell (occupancy) -> organ (efficacy vs liability) -> body (window) -> arbiter (safety-first, with trace chain)`.
 Any level that lacks data halts the graph to an INCONCLUSIVE verdict instead of guessing.
+
+## PK agent (v0.2)
+One-compartment oral model with first-order absorption (`fullbody/pk.py`). Inputs in `data/pk_params.json`, each with its source:
+tofacitinib 5 mg q12h (F 74%, V 87 L, t1/2 ~3 h, 40% protein-bound; XELJANZ label), upadacitinib ER 15 mg q24h
+(CL/F derived from label AUCinf 265 ng·h/mL; protein binding 52% from a secondary source, not the label).
+
+Checks against label values:
+- tofacitinib: model Cmax 36.2 vs label 42.7 ng/mL; model AUC24 368 sits between label Table 8 (263) and RA Table 9 (504).
+- upadacitinib: a plain terminal t1/2 (11 h) underpredicted single-dose Cmax by ~56% (13.8 vs 31.6), so the effective t1/2 was FITTED (2.66 h) to the label Cmax. Steady-state trough is therefore not predictive.
+
+**Known failure:** with the default efficacy threshold (JAK1 mean occupancy >= 0.5 against enzyme IC50 and free plasma concentration) both approved, efficacious RA drugs come out NOT SUPPORTED (mean occupancy ~0.2). The threshold is unvalidated; `fullbody validate` shows this. Lowering it to 0.15 separates the two drugs through JAK2 liability, but that value was read off the same two drugs, so it is circular, not a validation. Enzyme IC50 vs free plasma exposure ignores cellular potency and tissue distribution.
 
 ## What this is not
 - Not a validated physiological simulation: occupancy = C/(C+IC50) ignores ATP competition, protein binding, PK, tissue distribution.

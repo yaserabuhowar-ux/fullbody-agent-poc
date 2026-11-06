@@ -1,0 +1,23 @@
+{
+  "_note": "PK inputs for the one-compartment oral model. Each value carries its source. 'derived' = computed by this project from sourced values, not read from a label.",
+  "CHEMBL221959": {
+    "name": "tofacitinib", "form": "immediate-release tablet", "regimen": {"dose_mg": 5, "interval_h": 12},
+    "mw": 312.38,
+    "F": {"value": 0.74, "source": "XELJANZ US label 12.3 (absolute oral bioavailability 74%)", "url": "https://www.pfizermedical.com/xeljanz/clinical-pharmacology"},
+    "V_L": {"value": 87, "source": "XELJANZ US label 12.3 (volume of distribution after IV dose)", "url": "https://www.pfizermedical.com/xeljanz/clinical-pharmacology"},
+    "t_half_h": {"value": 3.0, "source": "XELJANZ label: elimination half-life about 3 h", "url": "https://medlibrary.org/lib/rx/meds/tofacitinib-5/page/7/"},
+    "tmax_h": {"value": 1.0, "source": "XELJANZ label Table 8: median Tmax 1.0 h (0.5-14.0)", "url": "https://www.pfizermedical.com/xeljanz/clinical-pharmacology"},
+    "fu": {"value": 0.60, "source": "XELJANZ label: protein binding about 40%", "url": "https://www.pfizermedical.com/xeljanz/clinical-pharmacology"},
+    "reported_ss": {"cmax_ng_ml": 42.7, "auc24_ng_h_ml": 263.4, "cmin_ng_ml": 1.41, "source": "XELJANZ label Table 8, 5 mg BID (population not RA-specific)"},
+    "reported_ss_ra": {"auc24_ng_h_ml": 504, "source": "XELJANZ label Table 9, RA 5 mg BID"}
+  },
+  "CHEMBL3622821": {
+    "name": "upadacitinib", "form": "extended-release tablet", "regimen": {"dose_mg": 15, "interval_h": 24},
+    "mw": 380.37,
+    "CL_F_L_h": {"value": 56.6, "source": "derived: dose / AUCinf, 15 mg single dose = 15000 ug / 0.265 ug.h/mL", "derived": true},
+    "t_half_h": {"value": 11.0, "source": "RINVOQ label: terminal half-life 8-14 h (midpoint used)", "url": "https://medlibrary.org/lib/rx/meds/rinvoq/page/8/"},
+    "tmax_h": {"value": 3.0, "source": "RINVOQ label: median Tmax 2-4 h (midpoint used)", "url": "https://medlibrary.org/lib/rx/meds/rinvoq/page/8/"},
+    "fu": {"value": 0.48, "source": "protein binding 52% (DrugBank via findmeds.uk; secondary source, not the label)", "url": "https://www.findmeds.uk/medicines/upadacitinib-45mg-modified-release-tablets"},
+    "reported_single_dose": {"cmax_ng_ml": 31.6, "auc_inf_ng_h_ml": 265, "source": "RINVOQ label 12.3, 15 mg fasting healthy subjects"}
+  }
+}
