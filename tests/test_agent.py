@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,9 +26,12 @@ def test_occupancy_formula_hand_check():
     assert s["cell"]["IL-6/STAT3 (inflammation)"]["occupancy_at_conc"] == round(100 / (100 + ic50), 3)
 
 
-def test_missing_structure_halts_to_inconclusive():
-    s = simulate("CHEMBL2105759", SNAP, 100)  # baricitinib: no SMILES in snapshot
-    assert s["verdict"]["decision"] == "INCONCLUSIVE"
+def test_missing_structure_halts_to_inconclusive(tmp_path):
+    snap = json.loads(SNAP.read_text(encoding="utf-8"))
+    del snap["molecules"]["CHEMBL2105759"]["smiles"]
+    p = tmp_path / "snap.json"
+    p.write_text(json.dumps(snap), encoding="utf-8")
+    assert simulate("CHEMBL2105759", p, 100)["verdict"]["decision"] == "INCONCLUSIVE"
 
 
 def test_unknown_molecule_inconclusive():

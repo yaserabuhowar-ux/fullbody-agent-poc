@@ -60,5 +60,6 @@ def test_documented_validation_behaviour():
 
 
 def test_pk_missing_params_halts():
-    s = simulate("CHEMBL3301607", SNAP, use_pk=True)  # filgotinib: no structure -> halts earlier
+    s = simulate("CHEMBL3301607", SNAP, use_pk=True)  # filgotinib: no sourced PK parameters -> halts
     assert s["verdict"]["decision"] == "INCONCLUSIVE"
+    assert any("no sourced PK parameters" in t["finding"] for t in s["trace"])

@@ -33,6 +33,7 @@ class ChemblBackend(Protocol):
     def pchembl(self, molecule_id: str, target_chembl_id: str) -> list[float]: ...
     def properties(self, molecule_id: str) -> dict: ...
     def name(self, molecule_id: str) -> str: ...
+    def measurements(self, molecule_id: str, target_chembl_id: str) -> dict: ...
 
 
 class SnapshotBackend:
@@ -56,40 +57,96 @@ class SnapshotBackend:
     def name(self, molecule_id):
         return self.data["molecules"][molecule_id].get("name", molecule_id)
 
+    def measurements(self, molecule_id, target_chembl_id):
+        m = self.data["molecules"][molecule_id]
+        return {"values": list(m.get("pchembl", {}).get(target_chembl_id, [])),
+                "censored": [list(x) for x in m.get("censored", {}).get(target_chembl_id, [])]}
+
 
 class RestBackend:
-    """Live ChEMBL REST backend (https://www.ebi.ac.uk/chembl/api/data). Not run in sandbox."""
+    """Live ChEMBL REST backend (https://www.ebi.ac.uk/chembl/api/data).
+
+    NOT exercised against the real service in the build sandbox (network blocked); covered by a mocked-session test only.
+    Features: pagination, retry with backoff, optional on-disk cache, generic User-Agent.
+    """
 
     BASE = "https://www.ebi.ac.uk/chembl/api/data"
+    KNOWN_TARGETS = {"JAK1": "CHEMBL2835", "JAK2": "CHEMBL2971", "JAK3": "CHEMBL2148", "TYK2": "CHEMBL3553",
+                     "hERG": "CHEMBL240", "KCNH2": "CHEMBL240", "CYP3A4": "CHEMBL340"}
 
-    def __init__(self, session=None, min_pchembl_pool: float = 6.0, pool_limit: int = 200):
+    def __init__(self, session=None, min_pchembl_pool: float = 6.0, pool_limit: int = 200,
+                 cache_dir: str | Path | None = None, retries: int = 3, backoff_s: float = 1.5, sleep=None):
+        import time
+
         import requests
 
         self.s = session or requests.Session()
-        self.min_pool = min_pchembl_pool
-        self.limit = pool_limit
+        if hasattr(self.s, "headers"):
+            self.s.headers.update({"User-Agent": "fullbody-agent-poc/0.3"})
+        self.min_pool, self.limit = min_pchembl_pool, pool_limit
+        self.cache = Path(cache_dir) if cache_dir else None
+        self.retries, self.backoff = retries, backoff_s
+        self._sleep = sleep or time.sleep
+        if self.cache:
+            self.cache.mkdir(parents=True, exist_ok=True)
 
     def _get(self, path, **params):
-        r = self.s.get(f"{self.BASE}/{path}.json", params=params, timeout=60)
-        r.raise_for_status()
-        return r.json()
+        import hashlib
+
+        key = None
+        if self.cache:
+            key = self.cache / (hashlib.sha1(json.dumps([path, params], sort_keys=True).encode()).hexdigest() + ".json")
+            if key.exists():
+                return json.loads(key.read_text(encoding="utf-8"))
+        last = None
+        for attempt in range(self.retries):
+            try:
+                r = self.s.get(f"{self.BASE}/{path}.json", params=params, timeout=60)
+                if getattr(r, "status_code", 200) in (429, 500, 502, 503, 504):
+                    raise RuntimeError(f"HTTP {r.status_code}")
+                r.raise_for_status()
+                js = r.json()
+                if key:
+                    key.write_text(json.dumps(js), encoding="utf-8")
+                return js
+            except Exception as e:  # noqa: BLE001 - retry any transport/HTTP error, re-raise after the last try
+                last = e
+                self._sleep(self.backoff * (2 ** attempt))
+        raise last
+
+    def _pages(self, path, key, **params):
+        out, offset = [], 0
+        while True:
+            js = self._get(path, limit=100, offset=offset, **params)
+            out.extend(js.get(key, []))
+            if not (js.get("page_meta") or {}).get("next"):
+                return out
+            offset += 100
 
     def target_id(self, gene):
-        js = self._get("target", target_components__accession__isnull="false",
-                       target_synonym__iexact=gene, target_type="SINGLE PROTEIN",
-                       organism="Homo sapiens", limit=1)
+        if gene in self.KNOWN_TARGETS:
+            return self.KNOWN_TARGETS[gene]
+        js = self._get("target", target_components__target_component_synonyms__component_synonym__iexact=gene,
+                       target_type="SINGLE PROTEIN", organism="Homo sapiens", limit=1)
         t = js.get("targets", [])
         return t[0]["target_chembl_id"] if t else None
 
     def candidates(self, target_chembl_id):
-        js = self._get("activity", target_chembl_id=target_chembl_id, standard_type="IC50",
-                       pchembl_value__gte=self.min_pool, limit=self.limit)
-        return sorted({a["molecule_chembl_id"] for a in js.get("activities", [])})
+        acts = self._pages("activity", "activities", target_chembl_id=target_chembl_id, standard_type="IC50",
+                           pchembl_value__gte=self.min_pool)[: self.limit]
+        return sorted({a["molecule_chembl_id"] for a in acts})
+
+    def measurements(self, molecule_id, target_chembl_id):
+        acts = self._pages("activity", "activities", molecule_chembl_id=molecule_id, target_chembl_id=target_chembl_id,
+                           standard_type="IC50")
+        vals = [float(a["pchembl_value"]) for a in acts if a.get("pchembl_value") and a.get("standard_relation") in ("=", None)]
+        cens = [[a["standard_relation"], float(a["standard_value"])] for a in acts
+                if a.get("standard_relation") in (">", ">=") and a.get("standard_value") is not None
+                and a.get("standard_units") == "nM"]
+        return {"values": vals, "censored": cens}
 
     def pchembl(self, molecule_id, target_chembl_id):
-        js = self._get("activity", molecule_chembl_id=molecule_id, target_chembl_id=target_chembl_id,
-                       standard_type="IC50", pchembl_value__isnull="false", limit=100)
-        return [float(a["pchembl_value"]) for a in js.get("activities", []) if a.get("pchembl_value")]
+        return self.measurements(molecule_id, target_chembl_id)["values"]
 
     def properties(self, molecule_id):
         m = self._get(f"molecule/{molecule_id}")
@@ -122,6 +179,7 @@ class Result:
     name: str
     checks: list[Check] = field(default_factory=list)
     metrics: dict = field(default_factory=dict)
+    flags: list[str] = field(default_factory=list)
 
     @property
     def passed_all(self) -> bool:
@@ -145,6 +203,13 @@ def check_consistency(profile: dict) -> dict:
     for g, a in anti.items():
         if a.get("min_selectivity_delta", 0) < 0:
             errors.append(f"anti-target {g}: min_selectivity_delta must be >= 0")
+        kinds = [k for k in ("min_selectivity_delta", "min_ic50_uM", "informational") if k in a]
+        if len(kinds) != 1:
+            errors.append(f"anti-target {g}: give exactly one of min_selectivity_delta / min_ic50_uM / informational")
+        if a.get("min_ic50_uM", 1) <= 0:
+            errors.append(f"anti-target {g}: min_ic50_uM must be > 0")
+    if profile.get("missing_data_policy", "fail") not in ("fail", "pass", "flag"):
+        errors.append("missing_data_policy must be fail, pass or flag")
     if profile.get("min_pchembl") is None:
         warnings.append("min_pchembl missing; potency will not be enforced")
     levels = profile.get("levels", {})
@@ -175,6 +240,12 @@ def verify_candidate(mol: str, profile: dict, backend: ChemblBackend, tids: dict
     res = Result(mol, backend.name(mol))
     policy = profile.get("missing_data_policy", "fail")
     ok_missing = policy == "pass"
+    def _flag_missing(name, thr, why, level="3_cell"):
+        """Apply the missing-data policy; returns the Check."""
+        if policy == "flag":
+            res.flags.append(f"{name}: NO DATA ({why})")
+        return Check(level, name, policy in ("pass", "flag"), None, thr, f"no data (policy: {policy})")
+
 
     # level 1 (molecule): potency on every primary target
     pots = []
@@ -185,26 +256,45 @@ def verify_candidate(mol: str, profile: dict, backend: ChemblBackend, tids: dict
         res.metrics[f"pchembl_{g}"] = med
         res.metrics[f"n_{g}"] = len(vals)
         thr = profile.get("min_pchembl")
-        passed = med is not None and (thr is None or med >= thr)
-        res.checks.append(Check("1_molecule", f"potency_{g}", passed, med, thr,
-                                "" if med is not None else "no data"))
+        if med is None:
+            res.checks.append(_flag_missing(f"potency_{g}", thr, "no measurement", level="1_molecule"))
+        else:
+            res.checks.append(Check("1_molecule", f"potency_{g}", thr is None or med >= thr, med, thr))
     primary_med = min(p for p in pots if p is not None) if all(p is not None for p in pots) else None
 
-    # levels 3-5: selectivity vs anti-targets (safety proxy)
+    # levels 3-5: anti-targets (selectivity, safety floor, or informational)
     for a in profile.get("anti_targets", []):
         g = a["gene"]
-        vals = backend.pchembl(mol, tids[g])
+        meas = backend.measurements(mol, tids[g])
+        vals, cens = meas["values"], meas["censored"]
         med = _median(vals)
         res.metrics[f"pchembl_{g}"] = med
         res.metrics[f"n_{g}"] = len(vals)
-        if med is None or primary_med is None:
-            res.checks.append(Check("3_cell", f"selectivity_vs_{g}", ok_missing, None,
-                                    a["min_selectivity_delta"], "no data (policy: %s)" % policy))
-            continue
-        delta = round(primary_med - med, 2)
-        res.metrics[f"delta_vs_{g}"] = delta
-        res.checks.append(Check("3_cell", f"selectivity_vs_{g}", delta >= a["min_selectivity_delta"],
-                                delta, a["min_selectivity_delta"]))
+        if "min_selectivity_delta" in a:
+            if med is None or primary_med is None:
+                res.checks.append(_flag_missing(f"selectivity_vs_{g}", a["min_selectivity_delta"], "no pChEMBL"))
+                continue
+            delta = round(primary_med - med, 2)
+            res.metrics[f"delta_vs_{g}"] = delta
+            res.checks.append(Check("3_cell", f"selectivity_vs_{g}", delta >= a["min_selectivity_delta"],
+                                    delta, a["min_selectivity_delta"]))
+        elif "min_ic50_uM" in a:
+            floor = a["min_ic50_uM"]
+            if vals:
+                ic50_uM = round(10 ** (9 - med) / 1000.0, 3)
+                res.metrics[f"ic50_uM_{g}"] = ic50_uM
+                res.checks.append(Check("3_cell", f"safety_floor_{g}", ic50_uM >= floor, ic50_uM, floor, "measured IC50"))
+            elif cens and max(c[1] for c in cens if c[0] in (">", ">=")) / 1000.0 >= floor:
+                bound = max(c[1] for c in cens if c[0] in (">", ">=")) / 1000.0
+                res.metrics[f"ic50_uM_{g}"] = f">{bound}"
+                res.checks.append(Check("3_cell", f"safety_floor_{g}", True, f">{bound}", floor, "censored bound meets floor"))
+            else:
+                why = "only censored bounds below the floor" if cens else "no records"
+                res.checks.append(_flag_missing(f"safety_floor_{g}", floor, why))
+        else:  # informational: recorded, never gates
+            res.metrics[f"info_{g}_pchembl"] = med
+            if med is None:
+                res.flags.append(f"{g}: informational, no data")
 
     # levels 5-7: drug-likeness limits
     props = backend.properties(mol)
@@ -223,7 +313,7 @@ def verify_candidate(mol: str, profile: dict, backend: ChemblBackend, tids: dict
 
 def arbitrate(results: list[Result], profile: dict) -> list[dict]:
     """Safety-first: hard-fail on any failed check; survivors ranked by selectivity, potency, QED."""
-    anti = [a["gene"] for a in profile.get("anti_targets", [])]
+    anti = [a["gene"] for a in profile.get("anti_targets", []) if "min_selectivity_delta" in a]
     prim = profile["primary_targets"]
 
     def key(r: Result):
@@ -242,7 +332,7 @@ def arbitrate(results: list[Result], profile: dict) -> list[dict]:
 
 
 def _dump(r: Result) -> dict:
-    return {"chembl_id": r.chembl_id, "name": r.name, "metrics": r.metrics,
+    return {"chembl_id": r.chembl_id, "name": r.name, "metrics": r.metrics, "flags": r.flags,
             "trace": [asdict(c) for c in r.checks]}
 
 
@@ -282,7 +372,7 @@ def to_markdown(out: dict, profile: dict) -> str:
     L += ["", "## الترتيب النهائي", "",
           "| الترتيب | المركّب | pChEMBL (الهدف) | الفرق عن الهدف المضاد | QED | الحالة |", "|---|---|---|---|---|---|"]
     prim = profile["primary_targets"][0]
-    anti = profile.get("anti_targets", [{}])[0].get("gene")
+    anti = next((a["gene"] for a in profile.get("anti_targets", []) if "min_selectivity_delta" in a), None)
     for r in out["ranking"]:
         m = r["metrics"]
         L.append(f"| {r['rank'] or '—'} | {r['name']} ({r['chembl_id']}) | {m.get('pchembl_' + prim)} | "

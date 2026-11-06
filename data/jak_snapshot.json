@@ -1,13 +1,17 @@
 {
  "meta": {
   "source": "ChEMBL v34 via MCP tools (compound_search, get_bioactivity), fetched 2026-11-06",
-  "sampling": "Per molecule/target: first 5 IC50 records returned with pChEMBL>=5 (NOT the full set, mixed assay formats). Sample for prototype testing only.",
+  "sampling": "JAK1/JAK2: first 5 IC50 records with pChEMBL>=5. JAK3/TYK2: first 6 IC50 records returned by the tool (ordered by activity id, NOT a random or complete sample; e.g. tofacitinib JAK3 = 6 of 73). hERG/CYP3A4: all records the tool returned (<=6). 'censored' lists records with a '>' relation (no pChEMBL). Mixed assay formats (enzyme, cell, TR-FRET, caliper); a few JAK3/TYK2 records are cell-based or mis-annotated, so JAK3/TYK2 selectivity is a weak signal.",
   "filgotinib_note": "Bioactivity stored under parent CHEMBL3301607; properties read from salt record CHEMBL3301602 (properties are calculated on the parent).",
-  "smiles_note": "SMILES present only for upadacitinib and tofacitinib (fetched from ChEMBL 2026-11-06); other molecules have no structure in this snapshot."
+  "smiles_note": "SMILES fetched from ChEMBL compound_search 2026-11-06; filgotinib stored as free base (salt/solvent removed)."
  },
  "targets": {
   "JAK1": "CHEMBL2835",
-  "JAK2": "CHEMBL2971"
+  "JAK2": "CHEMBL2971",
+  "JAK3": "CHEMBL2148",
+  "TYK2": "CHEMBL3553",
+  "hERG": "CHEMBL240",
+  "CYP3A4": "CHEMBL340"
  },
  "molecules": {
   "CHEMBL221959": {
@@ -36,9 +40,40 @@
      7.7,
      7.7,
      7.48
+    ],
+    "CHEMBL2148": [
+     7.89,
+     7.89,
+     9.0,
+     8.3,
+     9.0,
+     8.49
+    ],
+    "CHEMBL3553": [
+     7.47,
+     6.75,
+     7.28,
+     5.92,
+     8.44,
+     7.62
     ]
    },
-   "smiles": "C[C@@H]1CCN(C(=O)CC#N)C[C@@H]1N(C)c1ncnc2[nH]ccc12"
+   "smiles": "C[C@@H]1CCN(C(=O)CC#N)C[C@@H]1N(C)c1ncnc2[nH]ccc12",
+   "censored": {
+    "CHEMBL240": [
+     [
+      ">",
+      30000
+     ]
+    ],
+    "CHEMBL340": [
+     [
+      ">",
+      52000
+     ]
+    ]
+   },
+   "note_cyp": "CYP3A4: IC50 >52 uM (HLM); TDI reported 'not active' in one assay, one TDI record 100% (assay-dependent)."
   },
   "CHEMBL2105759": {
    "name": "baricitinib",
@@ -66,8 +101,43 @@
      8.22,
      9.1,
      6.54
+    ],
+    "CHEMBL2148": [
+     6.1,
+     7.6,
+     6.1
+    ],
+    "CHEMBL3553": [
+     7.21,
+     7.28,
+     8.06,
+     7.28,
+     7.28
     ]
-   }
+   },
+   "censored": {
+    "CHEMBL2148": [
+     [
+      ">",
+      400
+     ],
+     [
+      ">=",
+      8000
+     ],
+     [
+      ">",
+      400
+     ]
+    ],
+    "CHEMBL3553": [
+     [
+      ">",
+      200000
+     ]
+    ]
+   },
+   "smiles": "CCS(=O)(=O)N1CC(CC#N)(n2cc(-c3ncnc4[nH]ccc34)cn2)C1"
   },
   "CHEMBL3622821": {
    "name": "upadacitinib",
@@ -95,9 +165,26 @@
      6.22,
      8.1,
      6.22
+    ],
+    "CHEMBL2148": [
+     5.64,
+     5.64,
+     5.68,
+     7.58,
+     5.64,
+     7.96
+    ],
+    "CHEMBL3553": [
+     5.33,
+     5.33,
+     5.33,
+     7.52,
+     5.33,
+     5.57
     ]
    },
-   "smiles": "CC[C@@H]1CN(C(=O)NCC(F)(F)F)C[C@@H]1c1cnc2cnc3[nH]ccc3n12"
+   "smiles": "CC[C@@H]1CN(C(=O)NCC(F)(F)F)C[C@@H]1c1cnc2cnc3[nH]ccc3n12",
+   "note_safety": "No hERG or CYP3A4 records returned by ChEMBL for this molecule (absence of data, not evidence of safety)."
   },
   "CHEMBL3301607": {
    "name": "filgotinib",
@@ -125,8 +212,52 @@
      5.34,
      7.6,
      7.39
+    ],
+    "CHEMBL2148": [
+     6.09,
+     6.72,
+     6.71,
+     6.73,
+     6.83
+    ],
+    "CHEMBL3553": [
+     5.58,
+     6.94,
+     7.06,
+     7.1,
+     7.14,
+     7.13
+    ],
+    "CHEMBL240": [
+     4.07,
+     4.07
     ]
-   }
+   },
+   "censored": {
+    "CHEMBL2148": [
+     [
+      ">",
+      10000
+     ]
+    ],
+    "CHEMBL240": [
+     [
+      ">",
+      100000
+     ]
+    ],
+    "CHEMBL340": [
+     [
+      ">",
+      70000
+     ],
+     [
+      ">",
+      100000
+     ]
+    ]
+   },
+   "smiles": "O=C(Nc1nc2cccc(-c3ccc(CN4CCS(=O)(=O)CC4)cc3)n2n1)C1CC1"
   },
   "CHEMBL3655081": {
    "name": "abrocitinib",
@@ -154,8 +285,42 @@
      5.14,
      7.44,
      5.85
+    ],
+    "CHEMBL2148": [
+     6.22,
+     6.32,
+     5.15
+    ],
+    "CHEMBL3553": [
+     5.9,
+     6.8,
+     6.26,
+     5.9
     ]
-   }
+   },
+   "censored": {
+    "CHEMBL2148": [
+     [
+      ">",
+      10000
+     ],
+     [
+      ">",
+      10000
+     ],
+     [
+      ">",
+      10000
+     ]
+    ],
+    "CHEMBL3553": [
+     [
+      ">",
+      200000
+     ]
+    ]
+   },
+   "smiles": "CCCS(=O)(=O)N[C@H]1C[C@@H](N(C)c2ncnc3[nH]ccc23)C1"
   }
  }
 }

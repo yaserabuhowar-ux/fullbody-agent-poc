@@ -34,3 +34,15 @@ Checks against label values:
 - Pathway/target map (JAK1 = efficacy, JAK2 = marrow liability) is hand-curated seed knowledge needing expert review.
 - Live ChEMBL REST backend (`fullbody/ria.py: RestBackend`) is untested against the network.
 - Only upadacitinib and tofacitinib have structures in the snapshot.
+
+## Update: live data path, safety profile, generator, UI
+
+**Data.** `RestBackend` (pagination, retry/backoff, on-disk cache) fetches ChEMBL live; `python -m fullbody.cli snapshot --molecules ...` pins a snapshot. **The live REST path has only been tested against a mocked session** (the build sandbox could not reach ChEMBL). The shipped snapshot was built from the ChEMBL MCP tools and covers the first N records per pair, not a random sample.
+
+**Safety profile** (`profiles/ra_jak1_safety.json`): JAK2/JAK3 selectivity deltas, hERG and CYP3A4 IC50 floors (10 uM, a screening assumption, not a validated margin), TYK2 informational. Missing data follows `missing_data_policy` (`fail`/`pass`/`flag`); `flag` passes but records NO DATA. Censored ">X" values count only if X is at or above the floor.
+
+**Generator** (`python -m fullbody.cli generate`): BRICS recombination of reference-drug fragments, filtered by heavy-atom count, Ro5, QED, PAINS/Brenk, SA score, and Tanimoto range. Output is **hypothesis only**: generated molecules have no measured activity, so potency/selectivity/safety are NO DATA flags. The ranking prior is similarity to selective vs non-selective references; it is a heuristic, not an activity prediction.
+
+**UI:** `pip install streamlit` then `streamlit run app/streamlit_app.py`.
+
+**Known limits:** unvalidated occupancy thresholds (0.5 default fails both approved RA drugs); upadacitinib PK is calibrated to label Cmax so trough is unreliable; 5 reference drugs only.

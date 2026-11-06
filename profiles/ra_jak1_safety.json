@@ -1,0 +1,41 @@
+{
+ "indication": "rheumatoid arthritis",
+ "levels": {
+  "7_body": "reduce pain and inflammation",
+  "5_organ": "act on synovium",
+  "1_molecule": "inhibit JAK1 potently"
+ },
+ "primary_targets": [
+  "JAK1"
+ ],
+ "anti_targets": [
+  {
+   "gene": "JAK2",
+   "min_selectivity_delta": 1.0
+  },
+  {
+   "gene": "JAK3",
+   "min_selectivity_delta": 0.5
+  },
+  {
+   "gene": "TYK2",
+   "informational": true
+  },
+  {
+   "gene": "hERG",
+   "min_ic50_uM": 10
+  },
+  {
+   "gene": "CYP3A4",
+   "min_ic50_uM": 10
+  }
+ ],
+ "min_pchembl": 7.0,
+ "property_limits": {
+  "ro5_violations_max": 1,
+  "qed_min": 0.5,
+  "psa_max": 140
+ },
+ "missing_data_policy": "flag",
+ "_note": "hERG/CYP3A4 floors of 10 uM are screening assumptions, not validated margins. 'flag' keeps molecules with no safety data but marks them."
+}
