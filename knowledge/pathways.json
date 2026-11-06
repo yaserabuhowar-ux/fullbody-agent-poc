@@ -1,0 +1,17 @@
+{
+  "_note": "Human-curated SEED knowledge for the reverse trace (levels 7->1). Not inferred by the agent. Must be reviewed by a domain expert before any use beyond demos.",
+  "rheumatoid arthritis": {
+    "chain": {
+      "7_body": "reduce joint pain/inflammation without global immunosuppression",
+      "6_organ_system": "dampen autoimmune activity in the musculoskeletal/immune axis",
+      "5_organ": "synovium of affected joints",
+      "4_tissue": "lower inflammatory cytokine signalling (e.g. IL-6, IFN-gamma) in synovial tissue",
+      "3_cell": "JAK-STAT signalling in synovial fibroblasts and T cells",
+      "2_organelle": "(not modelled in prototype)",
+      "1_molecule": "ATP-site inhibition of JAK1"
+    },
+    "primary_targets": ["JAK1"],
+    "anti_targets": ["JAK2"],
+    "anti_target_rationale": "JAK2 mediates EPO/TPO/GM-CSF signalling (haematopoiesis); sparing it is a common selectivity goal."
+  }
+}

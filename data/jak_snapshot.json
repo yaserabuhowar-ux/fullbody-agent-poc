@@ -1,0 +1,161 @@
+{
+ "meta": {
+  "source": "ChEMBL v34 via MCP tools (compound_search, get_bioactivity), fetched 2026-11-06",
+  "sampling": "Per molecule/target: first 5 IC50 records returned with pChEMBL>=5 (NOT the full set, mixed assay formats). Sample for prototype testing only.",
+  "filgotinib_note": "Bioactivity stored under parent CHEMBL3301607; properties read from salt record CHEMBL3301602 (properties are calculated on the parent).",
+  "smiles_note": "SMILES present only for upadacitinib and tofacitinib (fetched from ChEMBL 2026-11-06); other molecules have no structure in this snapshot."
+ },
+ "targets": {
+  "JAK1": "CHEMBL2835",
+  "JAK2": "CHEMBL2971"
+ },
+ "molecules": {
+  "CHEMBL221959": {
+   "name": "tofacitinib",
+   "max_phase": 4,
+   "properties": {
+    "mw": 312.38,
+    "alogp": 1.54,
+    "psa": 88.91,
+    "hbd": 1,
+    "hba": 5,
+    "ro5_violations": 0,
+    "qed": 0.93
+   },
+   "pchembl": {
+    "CHEMBL2835": [
+     6.95,
+     6.95,
+     8.39,
+     6.96,
+     8.21
+    ],
+    "CHEMBL2971": [
+     7.96,
+     7.96,
+     7.7,
+     7.7,
+     7.48
+    ]
+   },
+   "smiles": "C[C@@H]1CCN(C(=O)CC#N)C[C@@H]1N(C)c1ncnc2[nH]ccc12"
+  },
+  "CHEMBL2105759": {
+   "name": "baricitinib",
+   "max_phase": 4,
+   "properties": {
+    "mw": 371.43,
+    "alogp": 1.1,
+    "psa": 120.56,
+    "hbd": 1,
+    "hba": 7,
+    "ro5_violations": 0,
+    "qed": 0.72
+   },
+   "pchembl": {
+    "CHEMBL2835": [
+     8.4,
+     8.22,
+     9.0,
+     8.4,
+     8.4
+    ],
+    "CHEMBL2971": [
+     8.18,
+     7.06,
+     8.22,
+     9.1,
+     6.54
+    ]
+   }
+  },
+  "CHEMBL3622821": {
+   "name": "upadacitinib",
+   "max_phase": 4,
+   "properties": {
+    "mw": 380.37,
+    "alogp": 2.91,
+    "psa": 78.32,
+    "hbd": 2,
+    "hba": 4,
+    "ro5_violations": 0,
+    "qed": 0.73
+   },
+   "pchembl": {
+    "CHEMBL2835": [
+     8.1,
+     7.37,
+     8.1,
+     7.33,
+     7.37
+    ],
+    "CHEMBL2971": [
+     6.22,
+     6.92,
+     6.22,
+     8.1,
+     6.22
+    ]
+   },
+   "smiles": "CC[C@@H]1CN(C(=O)NCC(F)(F)F)C[C@@H]1c1cnc2cnc3[nH]ccc3n12"
+  },
+  "CHEMBL3301607": {
+   "name": "filgotinib",
+   "max_phase": -1,
+   "properties": {
+    "mw": 425.51,
+    "alogp": 1.98,
+    "psa": 96.67,
+    "hbd": 1,
+    "hba": 7,
+    "ro5_violations": 0,
+    "qed": 0.67
+   },
+   "pchembl": {
+    "CHEMBL2835": [
+     6.44,
+     8.0,
+     6.2,
+     8.0,
+     7.25
+    ],
+    "CHEMBL2971": [
+     5.62,
+     5.45,
+     5.34,
+     7.6,
+     7.39
+    ]
+   }
+  },
+  "CHEMBL3655081": {
+   "name": "abrocitinib",
+   "max_phase": 4,
+   "properties": {
+    "mw": 323.42,
+    "alogp": 1.25,
+    "psa": 90.98,
+    "hbd": 2,
+    "hba": 5,
+    "ro5_violations": 0,
+    "qed": 0.83
+   },
+   "pchembl": {
+    "CHEMBL2835": [
+     7.54,
+     7.54,
+     8.29,
+     6.75,
+     7.54
+    ],
+    "CHEMBL2971": [
+     6.09,
+     6.09,
+     5.14,
+     7.44,
+     5.85
+    ]
+   }
+  }
+ }
+}
