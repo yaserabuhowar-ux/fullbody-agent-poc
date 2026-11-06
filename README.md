@@ -3,7 +3,7 @@
 Supervisor agent + level agents (LangGraph) that run a molecule through molecule → target → cell → organ → body checks, and a reverse loop that ranks ChEMBL candidates against a desired profile. Data: ChEMBL v34 snapshot (JAK1/JAK2).
 
 ```bash
-pip install rdkit langgraph pytest
+pip install -r requirements.txt
 python -m fullbody.cli simulate CHEMBL3622821 --conc 100   # upadacitinib -> SUPPORTED (window 42.7-150.7 nM free)
 python -m fullbody.cli simulate CHEMBL221959 --conc 100    # tofacitinib  -> NOT SUPPORTED (no JAK1-over-JAK2 window)
 python -m fullbody.cli simulate CHEMBL3622821 --pk          # dose -> free-concentration profile -> occupancy
@@ -43,6 +43,6 @@ Checks against label values:
 
 **Generator** (`python -m fullbody.cli generate`): BRICS recombination of reference-drug fragments, filtered by heavy-atom count, Ro5, QED, PAINS/Brenk, SA score, and Tanimoto range. Output is **hypothesis only**: generated molecules have no measured activity, so potency/selectivity/safety are NO DATA flags. The ranking prior is similarity to selective vs non-selective references; it is a heuristic, not an activity prediction.
 
-**UI:** `pip install streamlit` then `streamlit run app/streamlit_app.py`.
+**UI:** after `pip install -r requirements.txt`, `streamlit run app/streamlit_app.py`.
 
 **Known limits:** unvalidated occupancy thresholds (0.5 default fails both approved RA drugs); upadacitinib PK is calibrated to label Cmax so trough is unreliable; 5 reference drugs only.
