@@ -46,3 +46,7 @@ Checks against label values:
 **UI:** `pip install streamlit` then `streamlit run app/streamlit_app.py`.
 
 **Known limits:** unvalidated occupancy thresholds (0.5 default fails both approved RA drugs); upadacitinib PK is calibrated to label Cmax so trough is unreliable; 5 reference drugs only.
+
+## Update: toy PBPK sketch
+
+`fullbody/pbpk.py` is a 5-compartment PBPK sketch (blood, liver, kidney, target tissue, rest of body) with a mass-balance check (`tests/test_pbpk.py`). **All parameters are placeholders and not calibrated to any drug**; outputs (e.g. Cmax) are not predictions. It is a scaffold for a future PBPK anti-target step, not a validated simulation, and is not wired into the agent.
