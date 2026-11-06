@@ -1,1 +1,8 @@
 streamlit
+rdkit
+langgraph
+pytest
+# needed by fullbody/pbpk.py
+numpy
+scipy
+matplotlib
